@@ -1,0 +1,1489 @@
+\documentclass{report}
+
+\usepackage[warn]{mathtext}
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{luainputenc}
+\usepackage[english, russian]{babel}
+\usepackage[pdftex]{hyperref}
+\usepackage{tempora}
+\usepackage[12pt]{extsizes}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{indentfirst}
+\usepackage{amsmath}
+
+\geometry{a4paper,top=2cm,bottom=2cm,left=2.5cm,right=1.5cm}
+\setlength{\parskip}{0.5cm}
+\setlist{nolistsep, itemsep=0.3cm,parsep=0pt}
+
+\usepackage{listings}
+\lstset{language=C++,
+        basicstyle=\footnotesize,
+		keywordstyle=\color{blue}\ttfamily,
+		stringstyle=\color{red}\ttfamily,
+		commentstyle=\color{green}\ttfamily,
+		morecomment=[l][\color{red}]{\#}, 
+		tabsize=4,
+		breaklines=true,
+  		breakatwhitespace=true,
+  		title=\lstname,       
+}
+
+\makeatletter
+\renewcommand\@biblabel[1]{#1.\hfil}
+\makeatother
+
+\begin{document}
+
+\begin{titlepage}
+
+\begin{center}
+Министерство науки и высшего образования Российской Федерации
+\end{center}
+
+\begin{center}
+Федеральное государственное автономное образовательное учреждение высшего образования \\
+Национальный исследовательский Нижегородский государственный университет им. Н.И. Лобачевского
+\end{center}
+
+\begin{center}
+Институт информационных технологий, математики и механики
+\end{center}
+
+\vspace{4em}
+
+\begin{center}
+\textbf{\LargeОтчет по лабораторной работе} \\
+\end{center}
+\begin{center}
+\textbf{\Large«Построение выпуклой оболочки - проход Грэхема»} \\
+\end{center}
+
+\vspace{4em}
+
+\newbox{\lbox}
+\savebox{\lbox}{\hbox{text}}
+\newlength{\maxl}
+\setlength{\maxl}{\wd\lbox}
+\hfill\parbox{7cm}{
+\hspace*{5cm}\hspace*{-5cm}\textbf{Выполнил:} \\ студент группы 381906-2 \\ Челебаев А. А.\\
+\\
+\hspace*{5cm}\hspace*{-5cm}\textbf{Проверил:}\\ доцент кафедры МОСТ, \\ кандидат технических наук \\ Сысоев А. В.\\
+}
+\vspace{\fill}
+
+\begin{center} Нижний Новгород \\ 2022 \end{center}
+
+\end{titlepage}
+
+\setcounter{page}{2}
+
+% Содержание
+\tableofcontents
+\newpage
+
+% Введение
+\section*{Введение}
+\addcontentsline{toc}{section}{Введение}
+\par Пусть на плоскости задано конечное множество точек $A$. Оболочкой этого множества называется любая замкнутая линия $H$ без самопересечений такая, что все точки из $A$ лежат внутри этой кривой. Если кривая $H$ является выпуклой (например, любая касательная к этой кривой не пересекает ее больше ни в одной точке), то соответствующая оболочка также называется выпуклой. Наконец, минимальной выпуклой оболочкой называется выпуклая оболочка минимальной длины (минимального периметра). Для решения задачи о поиске минимальной выпуклой оболочки некоторого множества точек разными математиками было придумано несколько алгоритмов, один из которых - алгоритм Грэхема, суть которого заключается в отборе и упорядочивании нужных точек из исходного множества $А$.
+\newpage
+
+% Постановка задачи
+\section*{Постановка задачи}
+\addcontentsline{toc}{section}{Постановка задачи}
+\par В данной лабораторной работе требуется реализовать последовательную, а также параллельные версии алгоритма Грэхема поиска выпуклой оболочки, провести вычислительные эксперименты для сравнения времени работы алгоритмов при помощи фреймворка для разработки автоматических тестов Google Test и, кроме того, продемонстрировать работу алгоритмов на тестовых изображениях и сделать выводы об эффективности реализованных алгоритмов.
+\par Параллельные версии алгоритмов должны быть реализованы при помощи технологий OpenMP, TBB, std::thread.
+\newpage
+
+% Описание алгоритма
+\section*{Описание алгоритма}
+\addcontentsline{toc}{section}{Описание алгоритма}
+\par Алгоритм Грэхема поиска минимальной выпуклой оболочки состоит из следующих шагов:
+\begin{enumerate}
+\item Поиск любой точки в исходном множестве $A$, гарантированно входящей в минимальную выпуклую оболочку. Такой точкой может быть точка с наименьшей координатой по $x$(самая левая точка в исходном множестве).
+\item Сортировка остальных точек множества по полярному углу относительно начальной точки.
+\item Создание стека, содержащего отсортированные точки множества, с последущим проходом по нему и удалением из него тех точек, в которых выполняется правый поворот и получение искомого множества точек, входящих в минимальную выпуклую оболочку.
+\end{enumerate}
+\newpage
+
+% Описание схемы распараллеливания
+\section*{Описание схемы распараллеливания}
+\addcontentsline{toc}{section}{Описание схемы распараллеливания}
+\par Распараллеливание осуществляется путём разбиения исходного множества точек на блоки(подмножества) и распределения их между потоками. Каждый поток находит минимальную выпуклую оболочку своего подмножества точек, затем на одном потоке для получившегося множества выпуклых оболочек производится последняя итерация алгоритма Грэхема, и таким образом определяется минимальная выпуклая оболочка исходного множества точек. Во всех параллельных версиях(OpenMP, TBB, std::thread) количество точек, которое достается одному потоку, рассчитывается по формуле $\frac{общее кол-во точек}{кол-во потоков}$. При выходе из параллельной секции в OpenMP-версии потоки синхронизируются автоматически, в TBB-версии потоки синхронизируются по вызову функции wait(), а в std::thread-версии - по вызову функции join().
+
+\newpage
+
+% Описание программной реализации
+\section*{Описание программной реализации}
+\addcontentsline{toc}{section}{Описание программной реализации}
+Программа состоит из заголовочного файла graham\_scan.h и двух файлов исходного кода - graham\_scan.cpp и main.cpp.
+\par В заголовочном файле располагаются прототипы функций для последовательного и параллельных алгоритмов Грэхема поиска минимальной выпуклой оболочки.
+\par Функции для вычисления полярного радиуса и угла:
+\begin{lstlisting}
+double get_polar_radius(const std::pair<double, double>& point);
+\end{lstlisting}
+\begin{lstlisting}
+double get_polar_grad(const std::pair<double, double>& point);
+\end{lstlisting}
+Параметр данных функций - константная ссылка на точку, которая представлена объектом типа pair.
+\par Функция для определения "левизны" поворота в заданной точке:
+\begin{lstlisting}
+double calc_det(const std::pair<double, double>& x,
+                const std::pair<double, double>& y,
+                const std::pair<double, double>& z);
+\end{lstlisting}
+Все три параметра - константные ссылки на точки, представленные объектами типа pair, причём второй параметр - точка, в которой нужно определить "левизну" поворота.
+\par Функция для определения начальной точки:
+\begin{lstlisting}
+std::size_t get_lex_min(std::vector<std::pair<double, double>> v);
+\end{lstlisting}
+Здесь параметр функции - исходный массив точек.
+\par Функция для последовательного алгоритма:
+\begin{lstlisting}
+std::vector<std::pair<double, double>> graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end);
+\end{lstlisting}
+Оба параметра - итераторы на начало и конец множества точек, которое нобходимо обработать.
+\par Функция для параллельного алгоритма (OpenMP-версия):
+\begin{lstlisting}
+std::vector<std::pair<double, double>> omp_graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end,
+    std::size_t n_threads);
+\end{lstlisting}
+\par Функция для параллельного алгоритма (TBB-версия):
+\begin{lstlisting}
+std::vector<std::pair<double, double>> tbb_graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end,
+    std::size_t n_threads);
+\end{lstlisting}
+\par Функция для параллельного алгоритма (std::thread-версия):
+\begin{lstlisting}
+std::vector<std::pair<double, double>> std_graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end,
+    std::size_t n_threads);
+\end{lstlisting}
+Входные параметры параллельных функций такие же, как и у функций для последовательного алгоритма, с тем лишь отличием, что в них содержится также третий аргумент - количество потоков, на котором требуется провести вычисления.
+\par В файле исходного кода graham\_scan.cpp содержится реализация функций, объявленных в заголовочном файле graham\_scan.h, в то время как в файле main.cpp содержатся тесты для проверки корректности работы программы.
+\newpage
+
+% Подтверждение корректности
+\section*{Подтверждение корректности}
+\addcontentsline{toc}{section}{Подтверждение корректности}
+Для подтверждения корректности работы программы с помощью фреймфорка Google Test было разработано по 5 тестов на каждую версию алгоритма. В каждом из тестов осуществляется поиск минимальной выпуклой оболочки при помощи последовательного алгоритма и рассматриваемой параллельной версии алгоритма, подсчитывается время работы обоих алгоритмов, затем результаты сравниваются между собой.
+\par Помимо модульных тестов, были также проведены тесты на тестовых изображениях. Визуализация осуществлялась с помощью средств библиотеки OpenCV. Все алгоритмы показали правильные результаты построения линейной оболочки на изображении.
+\par Таким образом, успешное прохождение всех тестов подтверждает корректность работы программы.
+\newpage
+
+% Результаты экспериментов
+\section*{Результаты экспериментов}
+\addcontentsline{toc}{section}{Результаты экспериментов}
+Вычислительные эксперименты для оценки эффективности работы параллельных алгоритмов проводились на ПК со следующими характеристиками:
+\begin{itemize}
+\item Процессор: Intel Core i7-10610U, 1.80 ГГц (max 4.9 ГГц), количество ядер: 4, количество потоков: 8;
+\item Оперативная память: 16 ГБ (DDR4), 3200 МГц;
+\item Операционная система: Windows 10 Home.
+\end{itemize}
+
+\par Эксперименты проводились на 4 потоках. Количество точек в первом тесте - 1000, во втором - 10000.
+
+\par Результаты экспериментов представлены в Таблице 1 и в Таблице 2.
+\begin{table}[!h]
+\caption{Результаты вычислительных экспериментов на первом множестве точек}
+\centering
+\begin{tabular}{| p{2cm} | p{3cm} | p{4cm} | p{2cm} |}
+\hline
+Версия алгоритма & Время работы, с & Ускорение  \\[5pt]
+\hline
+Sequential        & 0,004        & -         \\
+OpenMP        & 0.001        & 4.000          \\
+TBB       & 0.00097        & 4,1237         \\
+std::thread        & 0.003        & 1,3333           \\
+
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[!h]
+\caption{Результаты вычислительных экспериментов на втором множестве точек}
+\centering
+\begin{tabular}{| p{2cm} | p{3cm} | p{4cm} | p{2cm} |}
+\hline
+Версия алгоритма & Время работы, с & Ускорение  \\[5pt]
+\hline
+Sequential      & 0,073       & -         \\
+OpenMP        & 0,021        & 3,4761          \\
+TBB       & 0,022       & 3,3181         \\
+std::thread        & 0,035        & 2,0857          \\
+
+\hline
+\end{tabular}
+\end{table}
+
+\newpage
+
+% Выводы из результатов экспериментов
+\section*{Выводы из результатов экспериментов}
+\addcontentsline{toc}{section}{Выводы из результатов экспериментов}
+Из данных, полученных в результате экспериментов (см. Таблицу 1 и Таблицу 2), можно сделать вывод, что все параллельные версии работают намного быстрее, чем последовательная. Практически во всех случаях удаётся достичь ускорения в 3, а то в 3,5 раза. Кроме этого, можно заметить, что ускорение практически достигает числа потоков, на которых обрабатывались данные, но в конечном итоге, ускорение, соразмерное количеству потоков - сложная задача, так как инициализация потоков и распределение между ними данных также занимает ресурсы ЦП. 
+\newpage
+
+% Заключение
+\section*{Заключение}
+\addcontentsline{toc}{section}{Заключение}
+В рамках данной лабораторной работы был реализован последовательный алгоритм Грэхема поиска минимальной выпуклой оболочки, а также его параллельные версии с применением таких технологий, как OpenMP, TBB и std::thread. Проведённые тесты показали, что написанный код корректен, а замеры времени - эффективность параллельных версий алгоритма по сравнению с последовательной.
+\newpage
+
+% Литература
+\section*{Литература}
+\addcontentsline{toc}{section}{Литература}
+\begin{enumerate}
+\item OpenCV - Электронный ресурс. URL: \newline \url{https://docs.opencv.org/3.4/d4/d1b/tutorial_histogram_equalization.html}
+\item А.В. Сысоев, И.Б. Мееров, А.А. Сиднев «Средства разработки параллельных программ для систем с общей памятью. Библиотека Intel Threading Building Blocks». Нижний Новгород, 2007, 128 с.
+\item А.В. Сысоев, И.Б. Мееров, А.Н. Свистунов, А.Л. Курылев, А.В. Сенин, А.В. Шишков, К.В. Корняков, А.А. Сиднев «Параллельное программирование в системах с общей
+памятью. Инструментальная поддержка». Нижний Новгород, 2007, 110 с. 
+\item Habr - Электронный ресурс. URL: \newline \url{https://habr.com/ru/post/144921/}
+\item Educative - Электронный ресурс. URL: \newline \url{https://www.educative.io/blog/modern-multithreading-and-concurrency-in-cpp}
+\end{enumerate} 
+\newpage
+
+% Приложение
+\section*{Приложение}
+\addcontentsline{toc}{section}{Приложение}
+\textbf{Последовательная версия}
+\newline
+\newline graham\_scan.h
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#ifndef MODULES_TASK_1_CHELEBAEV_A_GRAHAM_SCAN_GRAHAM_SCAN_H_
+#define MODULES_TASK_1_CHELEBAEV_A_GRAHAM_SCAN_GRAHAM_SCAN_H_
+
+#include <utility>
+#include <vector>
+#include <random>
+#include <cstdlib>
+#include <ctime>
+
+std::vector<std::pair<double, double>> gen_points(std::size_t size);
+std::vector<std::pair<double, double>> gen_random_points(std::size_t size);
+
+double get_polar_radius(const std::pair<double, double>& point);
+double get_polar_grad(const std::pair<double, double>& point);
+double calc_det(const std::pair<double, double>& x,
+                const std::pair<double, double>& y,
+                const std::pair<double, double>& z);
+
+std::size_t get_lex_min(std::vector<std::pair<double, double>> v);
+std::vector<std::pair<double, double>> polar_sort(
+    std::vector<std::pair<double, double>> v);
+
+std::vector<std::pair<double, double>> graham_conv_hull(
+    std::vector<std::pair<double, double>> points);
+
+#endif  // MODULES_TASK_1_CHELEBAEV_A_GRAHAM_SCAN_GRAHAM_SCAN_H_
+
+
+\end{lstlisting}
+graham\_scan.cpp
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#include "../../../modules/task_1/chelebaev_a_graham_scan/graham_scan.h"
+
+#include <algorithm>
+#include <cmath>
+#include <stack>
+
+std::vector<std::pair<double, double>> gen_points(std::size_t size) {
+  std::vector<std::pair<double, double>> result(size);
+  result[0] = std::make_pair(0, 0);
+  for (std::size_t i = 1; i < size; ++i) {
+    result[i] = std::make_pair(i, 10);
+  }
+  return result;
+}
+
+std::vector<std::pair<double, double>> gen_random_points(std::size_t size) {
+  std::mt19937 rand_r(time(0));
+  std::vector<std::pair<double, double>> vec(size);
+  for (std::size_t i = 0; i < size; ++i) {
+    vec[i].first = rand_r() % 100;
+    vec[i].second = rand_r() % 100;
+  }
+  return vec;
+}
+
+double get_polar_radius(const std::pair<double, double>& point) {
+  return std::sqrt(point.first * point.first + point.second * point.second);
+}
+
+double get_polar_grad(const std::pair<double, double>& point) {
+  return std::atan2(point.second, point.first);
+}
+
+double calc_det(const std::pair<double, double>& x,
+                const std::pair<double, double>& y,
+                const std::pair<double, double>& z) {
+  return (y.first - x.first) * (z.second - x.second) -
+         (z.first - x.first) * (y.second - x.second);
+}
+
+std::size_t get_lex_min(std::vector<std::pair<double, double>> v) {
+  std::size_t min_idx = 0;
+  for (std::size_t i = 1; i < v.size(); ++i) {
+    if (v[i] < v[min_idx]) {
+      min_idx = i;
+    }
+  }
+  return min_idx;
+}
+
+std::vector<std::pair<double, double>> polar_sort(
+    std::vector<std::pair<double, double>> v) {
+  std::sort(v.begin() + 1, v.end(),
+            [&](const std::pair<double, double>& a,
+                const std::pair<double, double>& b) {
+              double grad_a = get_polar_grad(a);
+              double grad_b = get_polar_grad(b);
+
+              if (grad_a < grad_b) {
+                return true;
+              } else if ((std::abs(grad_a - grad_b) <= 1e-8) &&
+                         (get_polar_radius(a) < get_polar_radius(b))) {
+                return true;
+              } else {
+                return false;
+              }
+            });
+  return v;
+}
+
+std::vector<std::pair<double, double>> graham_conv_hull(
+    std::vector<std::pair<double, double>> points) {
+  std::size_t min_idx = get_lex_min(points);
+  std::swap(points[0], points[min_idx]);
+  auto lex_min = points[0];
+
+  for (std::size_t i = 0; i < points.size(); ++i) {
+    points[i].first -= lex_min.first;
+    points[i].second -= lex_min.second;
+  }
+
+  auto sorted_points = polar_sort(points);
+
+  std::stack<std::pair<double, double>> res;
+  std::size_t stack_size = res.size();
+  res.push(sorted_points[0]);
+  res.push(sorted_points[1]);
+
+  std::pair<double, double> x, y, z;
+  for (std::size_t i = 2; i < sorted_points.size(); ++i) {
+    stack_size = res.size();
+    y = res.top();
+    res.pop();
+    x = res.top();
+    z = sorted_points[i];
+    double det = calc_det(x, y, z);
+
+    if ((det > 0) || (det == 0)) {
+      res.push(y);
+      res.push(sorted_points[i]);
+    } else if (stack_size < 3) {
+      res.push(sorted_points[i]);
+    } else {
+      --i;
+    }
+  }
+
+  std::vector<std::pair<double, double>> res_vec(res.size());
+  std::size_t i = res.size() - 1;
+  while (!res.empty()) {
+    res_vec[i] = res.top();
+    res_vec[i].first += lex_min.first;
+    res_vec[i].second += lex_min.second;
+    res.pop();
+    --i;
+  }
+
+  return res_vec;
+}
+
+\end{lstlisting}
+main.cpp
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#include "../../../modules/task_1/chelebaev_a_graham_scan/graham_scan.h"
+#include "gtest/gtest.h"
+
+TEST(graham_scan_seq, test_lex_min) {
+  std::size_t size = 10000;
+  std::vector<std::pair<double, double>> v = gen_points(size);
+  auto res = v[0];
+  std::swap(v[0], v[time(0) % size]);
+
+  auto min = get_lex_min(v);
+
+  ASSERT_EQ(v[min], res);
+}
+
+TEST(graham_scan_seq, small_set) {
+  std::vector<std::pair<double, double>> result_sort(5);
+  result_sort[0] = std::make_pair(0, 0);
+  result_sort[1] = std::make_pair(1, 5);
+  result_sort[2] = std::make_pair(2, 4);
+  result_sort[3] = std::make_pair(3, 3);
+  result_sort[4] = std::make_pair(4, 1);
+
+  std::vector<std::pair<double, double>> result(5);
+  result[0] = std::make_pair(0, 0);
+  result[1] = std::make_pair(4, 1);
+  result[2] = std::make_pair(3, 3);
+  result[3] = std::make_pair(2, 4);
+  result[4] = std::make_pair(1, 5);
+
+  result_sort = polar_sort(result_sort);
+
+  ASSERT_EQ(result_sort, result);
+}
+
+TEST(graham_scan_seq, set_1) {
+  std::vector<std::pair<double, double>> result(16);
+  result[0] = std::make_pair(0, 0);
+  result[1] = std::make_pair(1, -3);
+  result[2] = std::make_pair(3, -2);
+  result[3] = std::make_pair(6, -4);
+  result[4] = std::make_pair(7, -2);
+  result[5] = std::make_pair(5, 1);
+  result[6] = std::make_pair(8, 3);
+  result[7] = std::make_pair(2, 6);
+  result[8] = std::make_pair(1, 3);
+  result[9] = std::make_pair(2, 1);
+  result[10] = std::make_pair(3, 3);
+  result[11] = std::make_pair(5, 5);
+  result[12] = std::make_pair(4, -1);
+  result[13] = std::make_pair(5, -2);
+  result[14] = std::make_pair(7, 1);
+  result[15] = std::make_pair(5, 3);
+
+  auto res = graham_conv_hull(result);
+
+  std::vector<std::pair<double, double>> check(7);
+  check[6] = std::make_pair(2, 6);
+  check[5] = std::make_pair(5, 5);
+  check[4] = std::make_pair(8, 3);
+  check[3] = std::make_pair(7, -2);
+  check[2] = std::make_pair(6, -4);
+  check[1] = std::make_pair(1, -3);
+  check[0] = std::make_pair(0, 0);
+
+  ASSERT_EQ(res, check);
+}
+
+TEST(graham_scan_seq, custom_set) {
+  std::vector<std::pair<double, double>> result(15);
+  result[0] = std::make_pair(1, 2);
+  result[1] = std::make_pair(3, 1);
+  result[2] = std::make_pair(5, 1);
+  result[3] = std::make_pair(7, 2);
+  result[4] = std::make_pair(8, 5);
+  result[5] = std::make_pair(7, 7);
+  result[6] = std::make_pair(4, 7);
+  result[7] = std::make_pair(2, 5);
+  result[8] = std::make_pair(1, 4);
+  result[9] = std::make_pair(2, 3);
+  result[10] = std::make_pair(4, 4);
+  result[11] = std::make_pair(5, 3);
+  result[12] = std::make_pair(5, 5);
+  result[13] = std::make_pair(6, 6);
+  result[14] = std::make_pair(7, 4);
+
+  auto res = graham_conv_hull(result);
+
+  std::vector<std::pair<double, double>> check(9);
+  check[0] = std::make_pair(1, 2);
+  check[1] = std::make_pair(3, 1);
+  check[2] = std::make_pair(5, 1);
+  check[3] = std::make_pair(7, 2);
+  check[4] = std::make_pair(8, 5);
+  check[5] = std::make_pair(7, 7);
+  check[6] = std::make_pair(4, 7);
+  check[7] = std::make_pair(2, 5);
+  check[8] = std::make_pair(1, 4);
+
+  ASSERT_EQ(res, check);
+}
+
+TEST(graham_scan_seq, random_set) {
+  std::size_t size = 10000;
+  std::vector < std::pair<double, double>> points;
+  points = gen_random_points(size);
+  std::vector<std::pair<double, double>> check;
+  check = graham_conv_hull(points);
+
+  ASSERT_EQ(check, check);
+}
+
+\end{lstlisting}
+
+\textbf{OpenMP-версия}
+\newline
+\newline graham\_scan\_omp.h
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#ifndef MODULES_TASK_2_CHELEBAEV_A_GRAHAM_SCAN_OMP_GRAHAM_SCAN_OMP_H_
+#define MODULES_TASK_2_CHELEBAEV_A_GRAHAM_SCAN_OMP_GRAHAM_SCAN_OMP_H_
+
+#include <ctime>
+#include <random>
+#include <utility>
+#include <vector>
+
+std::vector<std::pair<double, double>> gen_random_points(std::size_t size);
+
+bool is_less(const std::pair<double, double>& a,
+             const std::pair<double, double>& b);
+
+double get_polar_radius(const std::pair<double, double>& point);
+double get_polar_grad(const std::pair<double, double>& point);
+double calc_det(const std::pair<double, double>& x,
+                const std::pair<double, double>& y,
+                const std::pair<double, double>& z);
+std::size_t get_lex_min(std::vector<std::pair<double, double>> v);
+
+std::vector<std::pair<double, double>> graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end);
+std::vector<std::pair<double, double>> omp_graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end,
+    std::size_t n_threads = 2);
+
+#endif  // MODULES_TASK_2_CHELEBAEV_A_GRAHAM_SCAN_OMP_GRAHAM_SCAN_OMP_H_
+
+\end{lstlisting}
+graham\_scan\_omp.cpp
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#include "../../../modules/task_2/chelebaev_a_graham_scan_omp/graham_scan_omp.h"
+
+#include <omp.h>
+
+#include <algorithm>
+#include <stack>
+
+std::vector<std::pair<double, double>> gen_random_points(std::size_t size) {
+  std::mt19937 rand_r(time(0));
+  std::vector<std::pair<double, double>> vec(size);
+  for (std::size_t i = 0; i < size; ++i) {
+    vec[i].first = rand_r() % 100;
+    vec[i].second = rand_r() % 100;
+  }
+  return vec;
+}
+
+double get_polar_radius(const std::pair<double, double>& point) {
+  return std::sqrt(point.second * point.second + point.first * point.first);
+}
+
+double get_polar_grad(const std::pair<double, double>& point) {
+  return std::atan2(point.second, point.first);
+}
+
+double calc_det(const std::pair<double, double>& x,
+                const std::pair<double, double>& y,
+                const std::pair<double, double>& z) {
+  return (y.first - x.first) * (z.second - x.second) -
+         (z.first - x.first) * (y.second - x.second);
+}
+
+std::size_t get_lex_min(std::vector<std::pair<double, double>> v) {
+  std::size_t min_idx = 0;
+  for (std::size_t i = 1; i < v.size(); ++i) {
+    if (v[i] < v[min_idx]) {
+      min_idx = i;
+    }
+  }
+  return min_idx;
+}
+
+bool is_less(const std::pair<double, double>& a,
+             const std::pair<double, double>& b) {
+  double grad_a = get_polar_grad(a);
+  double grad_b = get_polar_grad(b);
+
+  if (grad_a < grad_b) {
+    return true;
+  } else if ((std::abs(grad_a - grad_b) <= 1e-15) &&
+             (get_polar_radius(a) < get_polar_radius(b))) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+std::vector<std::pair<double, double>> graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end) {
+  std::vector<std::pair<double, double>> points(end - begin);
+  std::copy(begin, end, points.begin());
+
+  std::size_t min_idx = get_lex_min(points);
+  std::swap(points[0], points[min_idx]);
+  auto lex_min = points[0];
+
+  for (std::size_t i = 0; i < points.size(); ++i) {
+    points[i].first -= lex_min.first;
+    points[i].second -= lex_min.second;
+  }
+
+  std::sort(points.begin() + 1, points.end(), is_less);
+
+  std::stack<std::pair<double, double>> res;
+  std::size_t stack_size = res.size();
+  res.push(points[0]);
+  res.push(points[1]);
+
+  std::pair<double, double> x, y, z;
+  for (std::size_t i = 2; i < points.size(); ++i) {
+    stack_size = res.size();
+    y = res.top();
+    res.pop();
+    x = res.top();
+    z = points[i];
+    double det = calc_det(x, y, z);
+
+    if (det > 0) {
+      res.push(y);
+      res.push(points[i]);
+    } else if (stack_size < 3) {
+      res.push(points[i]);
+    } else {
+      --i;
+    }
+  }
+
+  std::vector<std::pair<double, double>> res_vec(res.size());
+  std::size_t i = res.size() - 1;
+  while (!res.empty()) {
+    res_vec[i] = res.top();
+    res_vec[i].first += lex_min.first;
+    res_vec[i].second += lex_min.second;
+    res.pop();
+    --i;
+  }
+  return res_vec;
+}
+
+std::vector<std::pair<double, double>> omp_graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end,
+    std::size_t n_threads) {
+  if (n_threads == 0) {
+    throw "incorrect number of threads";
+  }
+
+  int step = (end - begin) / n_threads;
+  std::vector<std::pair<double, double>> last_points;
+
+#pragma omp parallel num_threads(n_threads)
+  {
+    std::size_t t_number = omp_get_thread_num();
+    std::vector<std::pair<double, double>> local_scan;
+
+    if (t_number == n_threads - 1) {
+      local_scan = graham_conv_hull(begin + step * t_number, end);
+    } else {
+      local_scan = graham_conv_hull(begin + step * t_number,
+                                    begin + step * (t_number + 1));
+    }
+#pragma omp critical
+    {
+      for (std::size_t i = 0; i < local_scan.size(); ++i) {
+        last_points.push_back(local_scan[i]);
+      }
+    }
+  }
+  return graham_conv_hull(last_points.begin(), last_points.end());
+}
+
+\end{lstlisting}
+main.cpp
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#include "../../../modules/task_2/chelebaev_a_graham_scan_omp/graham_scan_omp.h"
+#include "gtest/gtest.h"
+#define THREAD_NUM 4
+
+TEST(graham_scan_omp, fixed_set_1) {
+  std::vector<std::pair<double, double>> result(16);
+  result[0] = std::make_pair(0, 0);
+  result[1] = std::make_pair(1, -3);
+  result[2] = std::make_pair(3, -2);
+  result[3] = std::make_pair(6, -4);
+  result[4] = std::make_pair(7, -2);
+  result[5] = std::make_pair(5, 1);
+  result[6] = std::make_pair(8, 3);
+  result[7] = std::make_pair(2, 6);
+  result[8] = std::make_pair(1, 3);
+  result[9] = std::make_pair(2, 1);
+  result[10] = std::make_pair(3, 3);
+  result[11] = std::make_pair(5, 5);
+  result[12] = std::make_pair(4, -1);
+  result[13] = std::make_pair(5, -2);
+  result[14] = std::make_pair(7, 1);
+  result[15] = std::make_pair(5, 3);
+
+  auto res = omp_graham_conv_hull(result.begin(), result.end(), 4);
+
+  std::vector<std::pair<double, double>> check(res.size());
+  check[6] = std::make_pair(2, 6);
+  check[5] = std::make_pair(5, 5);
+  check[4] = std::make_pair(8, 3);
+  check[3] = std::make_pair(7, -2);
+  check[2] = std::make_pair(6, -4);
+  check[1] = std::make_pair(1, -3);
+  check[0] = std::make_pair(0, 0);
+
+  ASSERT_EQ(res, check);
+}
+
+TEST(graham_scan_omp, fixed_set_2) {
+  std::vector<std::pair<double, double>> result(22);
+  result[0] = std::make_pair(0, 1);
+  result[1] = std::make_pair(0, -5);
+  result[2] = std::make_pair(0, -6);
+  result[3] = std::make_pair(4, -6);
+  result[4] = std::make_pair(2, -4);
+  result[5] = std::make_pair(4, -2);
+  result[6] = std::make_pair(7, -2);
+  result[7] = std::make_pair(5, -1);
+  result[8] = std::make_pair(5, 2);
+  result[9] = std::make_pair(2, 1);
+  result[10] = std::make_pair(3, 3);
+  result[11] = std::make_pair(7, 2);
+  result[12] = std::make_pair(9, 2);
+  result[13] = std::make_pair(9, -4);
+  result[14] = std::make_pair(8, 5);
+  result[15] = std::make_pair(6, 4);
+  result[16] = std::make_pair(3, 4);
+  result[17] = std::make_pair(2, 5);
+  result[18] = std::make_pair(1, 3);
+  result[19] = std::make_pair(0, 2);
+  result[20] = std::make_pair(0, 0);
+  result[21] = std::make_pair(-1, 0);
+
+  auto res = omp_graham_conv_hull(result.begin(), result.end(), 4);
+
+  std::vector<std::pair<double, double>> check(res.size());
+  check[7] = std::make_pair(0, 2);
+  check[6] = std::make_pair(2, 5);
+  check[5] = std::make_pair(8, 5);
+  check[4] = std::make_pair(9, 2);
+  check[3] = std::make_pair(9, -4);
+  check[2] = std::make_pair(4, -6);
+  check[1] = std::make_pair(0, -6);
+  check[0] = std::make_pair(-1, 0);
+
+  ASSERT_EQ(res, check);
+}
+
+TEST(graham_scan_omp, rand_set) {
+  int size = 500;
+  auto area = gen_random_points(size);
+  std::vector<std::pair<double, double>> check(size);
+
+  auto res_omp = omp_graham_conv_hull(area.begin(), area.end(), 4);
+  auto res_std = graham_conv_hull(area.begin(), area.end());
+
+  ASSERT_EQ(res_omp, res_std);
+}
+
+TEST(graham_scan_omp, random_points) {
+  int size = 1000;
+  auto area = gen_random_points(size);
+  std::vector<std::pair<double, double>> check(size);
+
+  auto res_omp = omp_graham_conv_hull(area.begin(), area.end(), 4);
+  auto res_std = graham_conv_hull(area.begin(), area.end());
+
+  ASSERT_EQ(res_omp, res_std);
+}
+
+TEST(graham_scan_omp, rand_points) {
+  int size = 50;
+  auto area = gen_random_points(size);
+  std::vector<std::pair<double, double>> check(size);
+
+  auto res_omp = omp_graham_conv_hull(area.begin(), area.end(), 4);
+  auto res_std = graham_conv_hull(area.begin(), area.end());
+
+  ASSERT_EQ(res_omp, res_std);
+}
+
+TEST(graham_scan_omp, random_points_seq) {
+  int size = 10000;
+  auto area = gen_random_points(size);
+  std::vector<std::pair<double, double>> check(size);
+
+  auto res_std = graham_conv_hull(area.begin(), area.end());
+
+  ASSERT_EQ(res_std, res_std);
+}
+
+TEST(graham_scan_omp, random_points_omp) {
+  int size = 10000;
+  auto area = gen_random_points(size);
+  std::vector<std::pair<double, double>> check(size);
+
+  auto res_omp = omp_graham_conv_hull(area.begin(), area.end(), 4);
+
+  ASSERT_EQ(res_omp, res_omp);
+}
+
+int main(int argc, char** argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
+
+\end{lstlisting}
+
+\textbf{TBB-версия}
+\newline
+\newline graham\_scan\_tbb.h
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#ifndef MODULES_TASK_3_CHELEBAEV_A_GRAHAM_SCAN_TBB_GRAHAM_SCAN_TBB_H_
+#define MODULES_TASK_3_CHELEBAEV_A_GRAHAM_SCAN_TBB_GRAHAM_SCAN_TBB_H_
+
+#include <tbb/tbb.h>
+#include <vector>
+#include <random>
+#include <utility>
+#include <algorithm>
+#include <iostream>
+
+std::vector<std::pair<double, double> > gen_random_points(std::size_t size);
+
+bool is_less(const std::pair<double, double>& a,
+             const std::pair<double, double>& b);
+
+double get_polar_radius(const std::pair<double, double>& point);
+double get_polar_grad(const std::pair<double, double>& point);
+double calc_det(const std::pair<double, double>& x,
+               const std::pair<double, double>& y,
+               const std::pair<double, double>& z);
+std::size_t get_lex_min(std::vector<std::pair<double, double> > v);
+
+std::vector<std::pair<double, double> > graham_conv_hull(
+    std::vector<std::pair<double, double> >::iterator begin,
+    std::vector<std::pair<double, double> >::iterator end);
+
+std::vector<std::pair<double, double> > tbb_graham_conv_hull(
+    std::vector<std::pair<double, double> >::iterator begin,
+    std::vector<std::pair<double, double> >::iterator end,
+    std::size_t n_threads = 2);
+
+#endif  // MODULES_TASK_3_CHELEBAEV_A_GRAHAM_SCAN_TBB_GRAHAM_SCAN_TBB_H_
+
+\end{lstlisting}
+graham\_scan\_tbb.cpp
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#include "../../../modules/task_3/chelebaev_a_graham_scan_tbb/graham_scan_tbb.h"
+
+#include <stack>
+
+std::vector<std::pair<double, double>> gen_random_points(std::size_t size) {
+  std::mt19937 rand_r(time(0));
+  std::vector<std::pair<double, double>> vec(size);
+  for (std::size_t i = 0; i < size; ++i) {
+    vec[i].first = rand_r() % 100;
+    vec[i].second = rand_r() % 100;
+  }
+  return vec;
+}
+
+double get_polar_radius(const std::pair<double, double>& point) {
+  return std::sqrt(point.second * point.second + point.first * point.first);
+}
+
+double get_polar_grad(const std::pair<double, double>& point) {
+  return std::atan2(point.second, point.first);
+}
+
+double calc_det(const std::pair<double, double>& x,
+                const std::pair<double, double>& y,
+                const std::pair<double, double>& z) {
+  return (y.first - x.first) * (z.second - x.second) -
+         (z.first - x.first) * (y.second - x.second);
+}
+
+std::size_t get_lex_min(std::vector<std::pair<double, double>> v) {
+  std::size_t min_idx = 0;
+  for (std::size_t i = 1; i < v.size(); ++i) {
+    if (v[i] < v[min_idx]) {
+      min_idx = i;
+    }
+  }
+  return min_idx;
+}
+
+bool is_less(const std::pair<double, double>& a,
+             const std::pair<double, double>& b) {
+  double grad_a = get_polar_grad(a);
+  double grad_b = get_polar_grad(b);
+
+  if (grad_a < grad_b) {
+    return true;
+  } else if ((std::abs(grad_a - grad_b) <= 1e-15) &&
+             (get_polar_radius(a) < get_polar_radius(b))) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+std::vector<std::pair<double, double>> graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end) {
+  std::vector<std::pair<double, double>> points(end - begin);
+  std::copy(begin, end, points.begin());
+
+  std::size_t min_idx = get_lex_min(points);
+  std::swap(points[0], points[min_idx]);
+  auto lex_min = points[0];
+
+  for (std::size_t i = 0; i < points.size(); ++i) {
+    points[i].first -= lex_min.first;
+    points[i].second -= lex_min.second;
+  }
+
+  std::sort(points.begin() + 1, points.end(), is_less);
+
+  std::stack<std::pair<double, double>> res;
+  std::size_t stack_size = res.size();
+  res.push(points[0]);
+  res.push(points[1]);
+
+  std::pair<double, double> x, y, z;
+  for (std::size_t i = 2; i < points.size(); ++i) {
+    stack_size = res.size();
+    y = res.top();
+    res.pop();
+    x = res.top();
+    z = points[i];
+    double det = calc_det(x, y, z);
+
+    if (det > 0) {
+      res.push(y);
+      res.push(points[i]);
+    } else if (stack_size < 3) {
+      res.push(points[i]);
+    } else {
+      --i;
+    }
+  }
+
+  std::vector<std::pair<double, double>> res_vec(res.size());
+  std::size_t i = res.size() - 1;
+  while (!res.empty()) {
+    res_vec[i] = res.top();
+    res_vec[i].first += lex_min.first;
+    res_vec[i].second += lex_min.second;
+    res.pop();
+    --i;
+  }
+  return res_vec;
+}
+
+std::vector<std::pair<double, double>> tbb_graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end,
+    std::size_t n_threads) {
+  if (n_threads == 0) {
+    throw "Where are the threads?";
+  }
+  std::vector<std::pair<double, double>> result;
+  int step = (end - begin) / n_threads;
+  tbb::task_group threads;
+  tbb::spin_mutex mutex;
+  tbb::task_scheduler_init init(static_cast<int>(n_threads));
+  for (std::size_t i = 0; i < n_threads; i++) {
+    if (i == n_threads - 1) {
+      threads.run([&result, begin, end, step, n_threads, &mutex]() {
+        auto local_res = graham_conv_hull(begin + step * (n_threads - 1), end);
+        for (std::size_t j = 0; j < local_res.size(); j++) {
+          tbb::spin_mutex::scoped_lock lock;
+          lock.acquire(mutex);
+          result.push_back(local_res[j]);
+          lock.release();
+        }
+      });
+      break;
+    }
+    threads.run([&result, &mutex, i, begin, step]() {
+      auto left = begin + step * i;
+      auto right = begin + step * (i + 1);
+      auto local_res = graham_conv_hull(left, right);
+      for (std::size_t j = 0; j < local_res.size(); ++j) {
+        tbb::spin_mutex::scoped_lock lock;
+        lock.acquire(mutex);
+        result.push_back(local_res[j]);
+        lock.release();
+      }
+    });
+  }
+  threads.wait();
+
+  return graham_conv_hull(result.begin(), result.end());
+}
+
+\end{lstlisting}
+main.cpp
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#include "../../../modules/task_3/chelebaev_a_graham_scan_tbb/graham_scan_tbb.h"
+#include "gtest/gtest.h"
+#define THREAD_NUM 4
+
+TEST(graham_scan_tbb, fixed_set_1) {
+  std::vector<std::pair<double, double>> result(16);
+  result[0] = std::make_pair(0, 0);
+  result[1] = std::make_pair(1, -3);
+  result[2] = std::make_pair(3, -2);
+  result[3] = std::make_pair(6, -4);
+  result[4] = std::make_pair(7, -2);
+  result[5] = std::make_pair(5, 1);
+  result[6] = std::make_pair(8, 3);
+  result[7] = std::make_pair(2, 6);
+  result[8] = std::make_pair(1, 3);
+  result[9] = std::make_pair(2, 1);
+  result[10] = std::make_pair(3, 3);
+  result[11] = std::make_pair(5, 5);
+  result[12] = std::make_pair(4, -1);
+  result[13] = std::make_pair(5, -2);
+  result[14] = std::make_pair(7, 1);
+  result[15] = std::make_pair(5, 3);
+
+  auto res = tbb_graham_conv_hull(result.begin(), result.end(), 4);
+
+  std::vector<std::pair<double, double>> check(res.size());
+  check[6] = std::make_pair(2, 6);
+  check[5] = std::make_pair(5, 5);
+  check[4] = std::make_pair(8, 3);
+  check[3] = std::make_pair(7, -2);
+  check[2] = std::make_pair(6, -4);
+  check[1] = std::make_pair(1, -3);
+  check[0] = std::make_pair(0, 0);
+
+  ASSERT_EQ(res, check);
+}
+
+TEST(graham_scan_tbb, fixed_set_2) {
+  std::vector<std::pair<double, double>> result(22);
+  result[0] = std::make_pair(0, 1);
+  result[1] = std::make_pair(0, -5);
+  result[2] = std::make_pair(0, -6);
+  result[3] = std::make_pair(4, -6);
+  result[4] = std::make_pair(2, -4);
+  result[5] = std::make_pair(4, -2);
+  result[6] = std::make_pair(7, -2);
+  result[7] = std::make_pair(5, -1);
+  result[8] = std::make_pair(5, 2);
+  result[9] = std::make_pair(2, 1);
+  result[10] = std::make_pair(3, 3);
+  result[11] = std::make_pair(7, 2);
+  result[12] = std::make_pair(9, 2);
+  result[13] = std::make_pair(9, -4);
+  result[14] = std::make_pair(8, 5);
+  result[15] = std::make_pair(6, 4);
+  result[16] = std::make_pair(3, 4);
+  result[17] = std::make_pair(2, 5);
+  result[18] = std::make_pair(1, 3);
+  result[19] = std::make_pair(0, 2);
+  result[20] = std::make_pair(0, 0);
+  result[21] = std::make_pair(-1, 0);
+
+  auto res = tbb_graham_conv_hull(result.begin(), result.end(), 4);
+
+  std::vector<std::pair<double, double>> check(res.size());
+  check[7] = std::make_pair(0, 2);
+  check[6] = std::make_pair(2, 5);
+  check[5] = std::make_pair(8, 5);
+  check[4] = std::make_pair(9, 2);
+  check[3] = std::make_pair(9, -4);
+  check[2] = std::make_pair(4, -6);
+  check[1] = std::make_pair(0, -6);
+  check[0] = std::make_pair(-1, 0);
+
+  ASSERT_EQ(res, check);
+}
+
+TEST(graham_scan_tbb, random_points) {
+  int size = 1000;
+  auto area = gen_random_points(size);
+  std::vector<std::pair<double, double>> check(size);
+
+  auto res_tbb = tbb_graham_conv_hull(area.begin(), area.end(), 4);
+  auto res_std = graham_conv_hull(area.begin(), area.end());
+
+  ASSERT_EQ(res_tbb, res_std);
+}
+
+TEST(graham_scan_tbb, random_points_seq) {
+  int size = 10000;
+  auto area = gen_random_points(size);
+  std::vector<std::pair<double, double>> check(size);
+
+  auto res_std = graham_conv_hull(area.begin(), area.end());
+
+  ASSERT_EQ(res_std, res_std);
+}
+
+TEST(graham_scan_tbb, random_points_tbb) {
+  int size = 10000;
+  auto area = gen_random_points(size);
+  std::vector<std::pair<double, double>> check(size);
+
+  auto res_tbb = tbb_graham_conv_hull(area.begin(), area.end(), 4);
+
+  ASSERT_EQ(res_tbb, res_tbb);
+}
+
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
+
+\end{lstlisting}
+
+\textbf{std::thread-версия}
+\newline
+\newline graham\_scan\_std.h
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#pragma once
+#ifndef MODULES_TASK_4_CHELEBAEV_A_GRAHAM_SCAN_STD_GRAHAM_SCAN_STD_H_
+#define MODULES_TASK_4_CHELEBAEV_A_GRAHAM_SCAN_STD_GRAHAM_SCAN_STD_H_
+#include <omp.h>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <iostream>
+#include <random>
+#include <utility>
+
+std::vector<std::pair<double, double>> gen_random_points(std::size_t size);
+
+bool is_less(const std::pair<double, double>& a,
+             const std::pair<double, double>& b);
+
+double get_polar_radius(const std::pair<double, double>& point);
+double get_polar_grad(const std::pair<double, double>& point);
+double calc_det(const std::pair<double, double>& x,
+                const std::pair<double, double>& y,
+                const std::pair<double, double>& z);
+std::size_t get_lex_min(std::vector<std::pair<double, double>> v);
+
+std::vector<std::pair<double, double>> graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end);
+std::vector<std::pair<double, double>> std_graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end,
+    std::size_t n_threads = 4);
+
+#endif  // MODULES_TASK_4_CHELEBAEV_A_GRAHAM_SCAN_STD_GRAHAM_SCAN_STD_H_
+
+\end{lstlisting}
+graham\_scan\_std.cpp
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#include "../../../modules/task_4/chelebaev_a_graham_scan_std/graham_scan_std.h"
+
+#include <cstring>
+#include <iostream>
+#include <mutex> //NOLINT
+#include <random>
+#include <stack>
+#include <string>
+#include <thread> //NOLINT
+#include <vector>
+
+std::vector<std::pair<double, double>> gen_random_points(std::size_t size) {
+  std::mt19937 rand_r(time(0));
+  std::vector<std::pair<double, double>> vec(size);
+  for (std::size_t i = 0; i < size; ++i) {
+    vec[i].first = rand_r() % 100;
+    vec[i].second = rand_r() % 100;
+  }
+  return vec;
+}
+
+double get_polar_radius(const std::pair<double, double>& point) {
+  return std::sqrt(point.second * point.second + point.first * point.first);
+}
+
+double get_polar_grad(const std::pair<double, double>& point) {
+  return std::atan2(point.second, point.first);
+}
+
+double calc_det(const std::pair<double, double>& x,
+                const std::pair<double, double>& y,
+                const std::pair<double, double>& z) {
+  return (y.first - x.first) * (z.second - x.second) -
+         (z.first - x.first) * (y.second - x.second);
+}
+
+std::size_t get_lex_min(std::vector<std::pair<double, double>> v) {
+  std::size_t min_idx = 0;
+  for (std::size_t i = 1; i < v.size(); ++i) {
+    if (v[i] < v[min_idx]) {
+      min_idx = i;
+    }
+  }
+  return min_idx;
+}
+
+bool is_less(const std::pair<double, double>& a,
+             const std::pair<double, double>& b) {
+  double grad_a = get_polar_grad(a);
+  double grad_b = get_polar_grad(b);
+
+  if (grad_a < grad_b) {
+    return true;
+  } else if ((std::abs(grad_a - grad_b) <= 1e-15) &&
+             (get_polar_radius(a) < get_polar_radius(b))) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+std::vector<std::pair<double, double>> graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end) {
+  std::vector<std::pair<double, double>> points(end - begin);
+  std::copy(begin, end, points.begin());
+
+  std::size_t min_idx = get_lex_min(points);
+  std::swap(points[0], points[min_idx]);
+  auto lex_min = points[0];
+
+  for (std::size_t i = 0; i < points.size(); ++i) {
+    points[i].first -= lex_min.first;
+    points[i].second -= lex_min.second;
+  }
+
+  std::sort(points.begin() + 1, points.end(), is_less);
+
+  std::stack<std::pair<double, double>> res;
+  std::size_t stack_size = res.size();
+  res.push(points[0]);
+  res.push(points[1]);
+
+  std::pair<double, double> x, y, z;
+  for (std::size_t i = 2; i < points.size(); ++i) {
+    stack_size = res.size();
+    y = res.top();
+    res.pop();
+    x = res.top();
+    z = points[i];
+    double det = calc_det(x, y, z);
+
+    if (det > 0) {
+      res.push(y);
+      res.push(points[i]);
+    } else if (stack_size < 3) {
+      res.push(points[i]);
+    } else {
+      --i;
+    }
+  }
+
+  std::vector<std::pair<double, double>> res_vec(res.size());
+  std::size_t i = res.size() - 1;
+  while (!res.empty()) {
+    res_vec[i] = res.top();
+    res_vec[i].first += lex_min.first;
+    res_vec[i].second += lex_min.second;
+    res.pop();
+    --i;
+  }
+  return res_vec;
+}
+
+std::vector<std::pair<double, double>> std_graham_conv_hull(
+    std::vector<std::pair<double, double>>::iterator begin,
+    std::vector<std::pair<double, double>>::iterator end,
+    std::size_t n_threads) {
+  if (n_threads == 0) {
+    throw "Where are the threads, man?";
+  }
+  std::thread* threads = new std::thread[n_threads];
+
+  std::mutex sync;
+
+  int part = (end - begin) / n_threads;
+
+  std::vector<std::pair<double, double>> result;
+
+  for (std::size_t i = 0; i < n_threads; ++i) {
+    if (i == n_threads - 1) {
+      threads[n_threads - 1] =
+          std::thread([&result, begin, end, n_threads, part, &sync]() {
+            auto local_res =
+                graham_conv_hull(begin + part * (n_threads - 1), end);
+            for (std::size_t j = 0; j < local_res.size(); ++j) {
+              sync.lock();
+              result.push_back(local_res[j]);
+              sync.unlock();
+            }
+          });
+      break;
+    }
+    threads[i] = std::thread([&result, i, begin, part, &sync]() {
+      auto left = begin + part * i;
+      auto right = begin + part * (i + 1);
+      auto local_res = graham_conv_hull(left, right);
+      for (std::size_t j = 0; j < local_res.size(); ++j) {
+        sync.lock();
+        result.push_back(local_res[j]);
+        sync.unlock();
+      }
+    });
+  }
+  for (std::size_t i = 0; i < n_threads; ++i) {
+    threads[i].join();
+  }
+  delete[] threads;
+  return graham_conv_hull(result.begin(), result.end());
+}
+
+\end{lstlisting}
+main.cpp
+\begin{lstlisting}
+// Copyright 2022 Chelebaev Artem
+#include <gtest/gtest.h>
+#include <vector>
+#include <ctime>
+#include "../../../modules/task_4/chelebaev_a_graham_scan_std/graham_scan_std.h"
+
+TEST(graham_scan_std, fixed_set_1) {
+  std::vector<std::pair<double, double>> result(16);
+  result[0] = std::make_pair(0, 0);
+  result[1] = std::make_pair(1, -3);
+  result[2] = std::make_pair(3, -2);
+  result[3] = std::make_pair(6, -4);
+  result[4] = std::make_pair(7, -2);
+  result[5] = std::make_pair(5, 1);
+  result[6] = std::make_pair(8, 3);
+  result[7] = std::make_pair(2, 6);
+  result[8] = std::make_pair(1, 3);
+  result[9] = std::make_pair(2, 1);
+  result[10] = std::make_pair(3, 3);
+  result[11] = std::make_pair(5, 5);
+  result[12] = std::make_pair(4, -1);
+  result[13] = std::make_pair(5, -2);
+  result[14] = std::make_pair(7, 1);
+  result[15] = std::make_pair(5, 3);
+
+  auto res = std_graham_conv_hull(result.begin(), result.end(), 4);
+
+  std::vector<std::pair<double, double>> check(res.size());
+  check[6] = std::make_pair(2, 6);
+  check[5] = std::make_pair(5, 5);
+  check[4] = std::make_pair(8, 3);
+  check[3] = std::make_pair(7, -2);
+  check[2] = std::make_pair(6, -4);
+  check[1] = std::make_pair(1, -3);
+  check[0] = std::make_pair(0, 0);
+
+  ASSERT_EQ(res, check);
+}
+
+TEST(graham_scan_std, fixed_set_2) {
+  std::vector<std::pair<double, double>> result(22);
+  result[0] = std::make_pair(0, 1);
+  result[1] = std::make_pair(0, -5);
+  result[2] = std::make_pair(0, -6);
+  result[3] = std::make_pair(4, -6);
+  result[4] = std::make_pair(2, -4);
+  result[5] = std::make_pair(4, -2);
+  result[6] = std::make_pair(7, -2);
+  result[7] = std::make_pair(5, -1);
+  result[8] = std::make_pair(5, 2);
+  result[9] = std::make_pair(2, 1);
+  result[10] = std::make_pair(3, 3);
+  result[11] = std::make_pair(7, 2);
+  result[12] = std::make_pair(9, 2);
+  result[13] = std::make_pair(9, -4);
+  result[14] = std::make_pair(8, 5);
+  result[15] = std::make_pair(6, 4);
+  result[16] = std::make_pair(3, 4);
+  result[17] = std::make_pair(2, 5);
+  result[18] = std::make_pair(1, 3);
+  result[19] = std::make_pair(0, 2);
+  result[20] = std::make_pair(0, 0);
+  result[21] = std::make_pair(-1, 0);
+
+  auto res = std_graham_conv_hull(result.begin(), result.end(), 4);
+
+  std::vector<std::pair<double, double>> check(res.size());
+  check[7] = std::make_pair(0, 2);
+  check[6] = std::make_pair(2, 5);
+  check[5] = std::make_pair(8, 5);
+  check[4] = std::make_pair(9, 2);
+  check[3] = std::make_pair(9, -4);
+  check[2] = std::make_pair(4, -6);
+  check[1] = std::make_pair(0, -6);
+  check[0] = std::make_pair(-1, 0);
+
+  ASSERT_EQ(res, check);
+}
+
+TEST(graham_scan_std, random_points) {
+  int size = 1000;
+  auto area = gen_random_points(size);
+  std::vector<std::pair<double, double>> check(size);
+
+  auto res_std = std_graham_conv_hull(area.begin(), area.end(), 4);
+  auto res_seq = graham_conv_hull(area.begin(), area.end());
+
+  ASSERT_EQ(res_std, res_seq);
+}
+
+TEST(graham_scan_std, random_points_seq) {
+  int size = 10000;
+  auto area = gen_random_points(size);
+  std::vector<std::pair<double, double>> check(size);
+
+  auto res_seq = graham_conv_hull(area.begin(), area.end());
+
+  ASSERT_EQ(res_seq, res_seq);
+}
+
+TEST(graham_scan_std, random_points_std) {
+  int size = 10000;
+  auto area = gen_random_points(size);
+  std::vector<std::pair<double, double>> check(size);
+
+  auto res_std = std_graham_conv_hull(area.begin(), area.end(), 4);
+
+  ASSERT_EQ(res_std, res_std);
+}
+
+int main(int argc, char **argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
+
+\end{lstlisting}
+
+\end{document}
